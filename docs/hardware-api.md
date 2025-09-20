@@ -50,7 +50,7 @@ POST /api/hardware/events
 
 #### 查询事件列表
 \`\`\`http
-GET /api/hardware/events?location_id=KS001&status=pending&limit=50&offset=0
+GET /api/hardware/events?location_id=KS001&status=active&limit=50&offset=0
 \`\`\`
 
 #### 获取事件详情
@@ -58,9 +58,22 @@ GET /api/hardware/events?location_id=KS001&status=pending&limit=50&offset=0
 GET /api/hardware/events/{event_id}
 \`\`\`
 
-#### 更新事件状态
+#### 更新事件状态/信息
 \`\`\`http
 PUT /api/hardware/events/{event_id}
+\`\`\`
+
+**请求体（按需传入字段）**:
+\`\`\`json
+{
+  "status": "resolved",
+  "resolved_at": "2024-05-06T10:30:00Z",
+  "metadata": {
+    "reviewed_by": "operator-01",
+    "notes": "现场处理完毕"
+  },
+  "confidence_score": 0.92
+}
 \`\`\`
 
 ### 2. 监控点管理
@@ -93,6 +106,27 @@ POST /api/hardware/locations
 GET /api/hardware/locations?active_only=true
 \`\`\`
 
+#### 获取监控点详情
+\`\`\`http
+GET /api/hardware/locations/{location_id}
+\`\`\`
+
+#### 更新监控点设置
+\`\`\`http
+PATCH /api/hardware/locations/{location_id}
+\`\`\`
+
+**请求体（示例）**:
+\`\`\`json
+{
+  "camera_status": "maintenance",
+  "settings": {
+    "detection_sensitivity": 0.75,
+    "voice_enabled": false
+  }
+}
+\`\`\`
+
 #### 设备心跳检测
 \`\`\`http
 POST /api/hardware/locations/{location_id}/ping
@@ -117,12 +151,27 @@ POST /api/hardware/locations/{location_id}/ping
 
 #### 获取警报列表
 \`\`\`http
-GET /api/hardware/alerts?location_id=KS001&status=active&limit=20
+GET /api/hardware/alerts?location_id=KS001&status=sent&limit=20
 \`\`\`
 
-#### 确认警报
+#### 获取警报详情
 \`\`\`http
-PUT /api/hardware/alerts/{alert_id}/acknowledge
+GET /api/hardware/alerts/{alert_id}
+\`\`\`
+
+#### 更新/确认警报
+\`\`\`http
+PATCH /api/hardware/alerts/{alert_id}
+\`\`\`
+
+**请求体（示例）**:
+\`\`\`json
+{
+  "status": "acknowledged",
+  "metadata": {
+    "acknowledged_by": "edge-device-01"
+  }
+}
 \`\`\`
 
 ## 事件类型
@@ -132,12 +181,10 @@ PUT /api/hardware/alerts/{alert_id}/acknowledge
 - `suspicious_activity`: 可疑活动
 - `maintenance_needed`: 需要维护
 
-## 状态码
+## 状态字段
 
-- `pending`: 待处理
-- `processing`: 处理中
-- `resolved`: 已解决
-- `dismissed`: 已忽略
+- **废物事件 `status`**: `active`, `investigating`, `resolved`, `false_positive`
+- **警报 `status`**: `pending`, `sent`, `failed`, `acknowledged`
 
 ## 错误处理
 
