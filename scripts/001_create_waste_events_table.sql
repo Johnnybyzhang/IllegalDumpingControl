@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS alerts (
   alert_type TEXT NOT NULL CHECK (alert_type IN ('voice_warning', 'light_flash', 'sms', 'email', 'dashboard')),
   message TEXT NOT NULL,
   sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('pending', 'sent', 'failed')),
+  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('pending', 'sent', 'failed', 'acknowledged')),
   metadata JSONB
 );
 

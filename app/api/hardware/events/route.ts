@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+
 // POST /api/hardware/events - 硬件设备上报废物倾倒事件
 export async function POST(request: NextRequest) {
   try {
