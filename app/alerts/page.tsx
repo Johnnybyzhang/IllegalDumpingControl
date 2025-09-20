@@ -1,13 +1,7 @@
-import { Suspense } from "react"
-import { AlertSystem } from "@/components/alert-system"
-import { DashboardSkeleton } from "@/components/dashboard-skeleton"
+import { redirect } from "next/navigation"
 
-export default function AlertsPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <Suspense fallback={<DashboardSkeleton />}>
-        <AlertSystem />
-      </Suspense>
-    </div>
-  )
+import { getDefaultLocalePath } from "@/lib/i18n/routing"
+
+export default function AlertsRedirectPage() {
+  redirect(getDefaultLocalePath("alerts"))
 }

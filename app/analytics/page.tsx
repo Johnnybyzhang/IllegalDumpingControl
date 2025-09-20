@@ -1,13 +1,7 @@
-import { Suspense } from "react"
-import { AnalyticsDashboard } from "@/components/analytics-dashboard"
-import { DashboardSkeleton } from "@/components/dashboard-skeleton"
+import { redirect } from "next/navigation"
 
-export default function AnalyticsPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <Suspense fallback={<DashboardSkeleton />}>
-        <AnalyticsDashboard />
-      </Suspense>
-    </div>
-  )
+import { getDefaultLocalePath } from "@/lib/i18n/routing"
+
+export default function AnalyticsRedirectPage() {
+  redirect(getDefaultLocalePath("analytics"))
 }

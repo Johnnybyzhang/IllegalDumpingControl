@@ -1,13 +1,7 @@
-import { Suspense } from "react"
-import { EventManagement } from "@/components/event-management"
-import { DashboardSkeleton } from "@/components/dashboard-skeleton"
+import { redirect } from "next/navigation"
 
-export default function EventsPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <Suspense fallback={<DashboardSkeleton />}>
-        <EventManagement />
-      </Suspense>
-    </div>
-  )
+import { getDefaultLocalePath } from "@/lib/i18n/routing"
+
+export default function EventsRedirectPage() {
+  redirect(getDefaultLocalePath("events"))
 }
