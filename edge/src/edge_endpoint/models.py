@@ -29,6 +29,12 @@ class InferenceMetadata(BaseModel):
     model_path: Optional[str] = Field(
         None, description="Filesystem path to the model used during inference."
     )
+    model_info: Optional[str] = Field(
+        None, description="Freeform description of the loaded YOLO model."
+    )
+    detection_count: Optional[int] = Field(
+        None, description="Number of detections returned for the current frame."
+    )
     inference_ms: Optional[float] = Field(
         None, description="Total inference time in milliseconds."
     )
@@ -107,6 +113,26 @@ class HealthStatus(BaseModel):
     model: ModelStatus
 
 
+class AlarmStatus(BaseModel):
+    """Current state of the GPIO alarm controller."""
+
+    enabled: bool
+    active: bool
+
+
+class AlarmControlRequest(BaseModel):
+    """Payload used to activate or deactivate the alarm relay."""
+
+    action: Literal["activate", "deactivate", "trigger"] = Field(
+        "trigger", description="Control action to perform."
+    )
+    duration_seconds: Optional[float] = Field(
+        None,
+        ge=0.1,
+        description="Optional duration override for trigger action.",
+    )
+
+
 __all__ = [
     "BoundingBox",
     "InferenceMetadata",
@@ -116,4 +142,6 @@ __all__ = [
     "ModelLoadResponse",
     "CameraStatusPayload",
     "HealthStatus",
+    "AlarmStatus",
+    "AlarmControlRequest",
 ]

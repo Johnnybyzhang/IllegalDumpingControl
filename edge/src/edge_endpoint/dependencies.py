@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import Depends, Request
 
 from .camera import CameraController
+from .gpio import AlarmController
 from .inference import YOLODetector
 from .state import AppState
 
@@ -30,4 +31,15 @@ def get_detector(state: AppState = Depends(get_app_state)) -> YOLODetector:
     return state.detector
 
 
-__all__ = ["get_app_state", "get_camera_controller", "get_detector"]
+def get_alarm_controller(state: AppState = Depends(get_app_state)) -> AlarmController:
+    """Dependency that yields the GPIO alarm controller."""
+
+    return state.alarm
+
+
+__all__ = [
+    "get_app_state",
+    "get_camera_controller",
+    "get_detector",
+    "get_alarm_controller",
+]

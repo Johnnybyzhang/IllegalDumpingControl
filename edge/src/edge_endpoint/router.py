@@ -7,14 +7,21 @@ from dataclasses import asdict
 from io import BytesIO
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from PIL import Image
 
 from .camera import CameraController
-from .dependencies import get_app_state, get_camera_controller, get_detector
+from .dependencies import (
+    get_alarm_controller,
+    get_app_state,
+    get_camera_controller,
+    get_detector,
+)
 from .inference import ModelLoadResult, YOLODetector
 from .models import (
+    AlarmControlRequest,
+    AlarmStatus,
     CameraStatusPayload,
     HealthStatus,
     InferenceRequest,
@@ -23,6 +30,7 @@ from .models import (
     ModelStatus,
 )
 from .state import AppState
+from .gpio import AlarmController
 
 router = APIRouter()
 
@@ -67,8 +75,10 @@ async def load_model(detector: YOLODetector = Depends(get_detector)) -> ModelLoa
 )
 async def run_inference(
     request: InferenceRequest,
+    background_tasks: BackgroundTasks,
     detector: YOLODetector = Depends(get_detector),
     camera: CameraController = Depends(get_camera_controller),
+    state: AppState = Depends(get_app_state),
 ) -> InferenceResponse:
     """Execute YOLO inference using either a captured or provided frame."""
 
@@ -76,6 +86,25 @@ async def run_inference(
     response = await run_in_threadpool(
         detector.predict, frame, return_image=request.return_image
     )
+
+    reporter = state.reporter
+    if reporter is not None:
+        task_source = "camera" if request.capture_from_camera else "image_base64"
+        background_tasks.add_task(
+            reporter.publish_inference,
+            response,
+            source=task_source,
+            capture_from_camera=request.capture_from_camera,
+        )
+
+    if state.pipeline is not None and response.detections:
+        encoded_snapshot = detector.encode_frame(frame)
+        background_tasks.add_task(
+            state.pipeline.process_detection,
+            response,
+            encoded_image=encoded_snapshot,
+            capture_from_camera=request.capture_from_camera,
+        )
     return response
 
 
@@ -116,6 +145,30 @@ def _decode_base64_image(data: str) -> np.ndarray:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unable to decode image: {exc}",
         ) from exc
+
+
+@router.get("/alarm", response_model=AlarmStatus)
+async def get_alarm_status(alarm: AlarmController = Depends(get_alarm_controller)) -> AlarmStatus:
+    """Return the current alarm controller status."""
+
+    return AlarmStatus(enabled=alarm.is_enabled, active=alarm.is_active)
+
+
+@router.post("/alarm", response_model=AlarmStatus)
+async def control_alarm(
+    request: AlarmControlRequest,
+    alarm: AlarmController = Depends(get_alarm_controller),
+) -> AlarmStatus:
+    """Activate or deactivate the GPIO alarm."""
+
+    if request.action == "activate":
+        alarm.activate()
+    elif request.action == "deactivate":
+        alarm.deactivate()
+    else:
+        alarm.trigger(duration=request.duration_seconds)
+
+    return AlarmStatus(enabled=alarm.is_enabled, active=alarm.is_active)
 
 
 __all__ = ["router"]

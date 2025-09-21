@@ -1,49 +1,27 @@
-import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
+import { createAlert, getEvent, listAlerts } from "@/lib/store/store"
 
 export const dynamic = "force-dynamic"
 
-const ALERT_SELECT = `
-  *,
-  waste_events (
-    location_id,
-    location_name,
-    event_type,
-    coordinates
-  )
-`
-
-// GET /api/hardware/alerts - 获取警报列表
+// GET /api/hardware/alerts
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
     const { searchParams } = new URL(request.url)
+    const location_id = searchParams.get("location_id") ?? undefined
+    const status = searchParams.get("status") ?? undefined
+    const limit = Number.parseInt(searchParams.get("limit") || "20", 10)
 
-    const location_id = searchParams.get("location_id")
-    const status = searchParams.get("status")
-    const limit = Number.parseInt(searchParams.get("limit") || "20")
+    const alerts = listAlerts({ status: status as any, location_id, limit })
 
-    let query = supabase.from("alerts").select(ALERT_SELECT).order("sent_at", { ascending: false }).limit(limit)
-
-    if (status) {
-      query = query.eq("status", status)
-    }
-
-    if (location_id) {
-      query = query.eq("waste_events.location_id", location_id)
-    }
-
-    const { data: alerts, error } = await query
-
-    if (error) {
-      console.error("查询警报失败:", error)
-      return NextResponse.json({ error: "查询警报失败" }, { status: 500 })
-    }
+    const result = alerts.map((alert) => ({
+      ...alert,
+      waste_events: alert.event_id ? getEvent(alert.event_id) ?? null : null,
+    }))
 
     return NextResponse.json({
       success: true,
-      data: alerts,
-      count: alerts.length,
+      data: result,
+      count: result.length,
     })
   } catch (error) {
     console.error("API错误:", error)

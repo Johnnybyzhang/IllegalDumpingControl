@@ -22,6 +22,15 @@ Continue building your app on:
 
 **[https://v0.app/chat/projects/QHA0PQtEAEV](https://v0.app/chat/projects/QHA0PQtEAEV)**
 
+## Assets
+
+Custom branding assets now live under `public/assets/`:
+
+- `public/assets/logo.png` – displayed across the monitoring, alerts, analytics, and events dashboards.
+- `public/assets/audio/alarm.m4a` – played in the browser whenever a new illegal-dumping alert is raised or an operator triggers the alarm manually.
+
+Edge detections still trigger the physical GPIO alarm; the web client now mirrors that behaviour with synchronized audio playback.
+
 ## How It Works
 
 1. Create and modify your project using [v0.app](https://v0.app)

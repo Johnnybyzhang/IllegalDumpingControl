@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,26 +7,21 @@ import { EventsTable } from "@/components/events-table"
 import { EventStats } from "@/components/event-stats"
 import { ArrowLeft, Search, Filter, Download } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
+import { getSummary } from "@/lib/store/store"
 
 export async function EventManagement() {
-  const supabase = await createClient()
+  const { events } = getSummary()
 
-  // Fetch all events with pagination
-  const { data: events, count } = await supabase
-    .from("waste_events")
-    .select("*", { count: "exact" })
-    .order("detected_at", { ascending: false })
-    .limit(50)
-
-  // Fetch event statistics
-  const { data: stats } = await supabase.from("waste_events").select("event_type, status")
+  const sortedEvents = [...events].sort((a, b) => (a.detected_at < b.detected_at ? 1 : -1))
+  const limitedEvents = sortedEvents.slice(0, 50)
 
   const eventStats = {
-    total: count || 0,
-    active: stats?.filter((s) => s.status === "active").length || 0,
-    resolved: stats?.filter((s) => s.status === "resolved").length || 0,
-    investigating: stats?.filter((s) => s.status === "investigating").length || 0,
-    illegalDumping: stats?.filter((s) => s.event_type === "illegal_dumping").length || 0,
+    total: events.length,
+    active: events.filter((event) => event.status === "active").length,
+    resolved: events.filter((event) => event.status === "resolved").length,
+    investigating: events.filter((event) => event.status === "investigating").length,
+    illegalDumping: events.filter((event) => event.event_type === "illegal_dumping").length,
   }
 
   return (
@@ -37,6 +31,14 @@ export async function EventManagement() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <Image
+                src="/assets/logo.png"
+                alt="Illegal Dumping Control"
+                width={48}
+                height={48}
+                className="rounded-lg shadow-md"
+                priority
+              />
               <Link href="/">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4 mr-2" />
@@ -124,7 +126,7 @@ export async function EventManagement() {
           </Card>
 
           {/* Events Table */}
-          <EventsTable events={events || []} />
+          <EventsTable events={limitedEvents} />
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,26 +7,18 @@ import { HeatMap } from "@/components/heat-map"
 import { TrendAnalysis } from "@/components/trend-analysis"
 import { LocationAnalytics } from "@/components/location-analytics"
 import Link from "next/link"
+import Image from "next/image"
+import { getSummary } from "@/lib/store/store"
 
 export async function AnalyticsDashboard() {
-  const supabase = await createClient()
+  const { events, locations } = getSummary()
 
-  // Fetch analytics data
-  const { data: events } = await supabase
-    .from("waste_events")
-    .select("*")
-    .order("detected_at", { ascending: false })
-    .limit(1000)
-
-  const { data: locations } = await supabase.from("monitoring_locations").select("*")
-
-  // Process data for analytics
   const processedData = {
-    events: events || [],
-    locations: locations || [],
-    totalEvents: events?.length || 0,
-    illegalDumpingEvents: events?.filter((e) => e.event_type === "illegal_dumping").length || 0,
-    resolvedEvents: events?.filter((e) => e.status === "resolved").length || 0,
+    events,
+    locations,
+    totalEvents: events.length,
+    illegalDumpingEvents: events.filter((event) => event.event_type === "illegal_dumping").length,
+    resolvedEvents: events.filter((event) => event.status === "resolved").length,
   }
 
   return (
@@ -37,6 +28,14 @@ export async function AnalyticsDashboard() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <Image
+                src="/assets/logo.png"
+                alt="Illegal Dumping Control"
+                width={48}
+                height={48}
+                className="rounded-lg shadow-md"
+                priority
+              />
               <Link href="/">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4 mr-2" />

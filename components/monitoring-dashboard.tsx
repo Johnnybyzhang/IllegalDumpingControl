@@ -1,10 +1,9 @@
 "use client"
 
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Camera, Activity, Shield, Zap, BarChart3, Volume2, Settings, Monitor, ArrowLeft } from "lucide-react"
+import { Camera, Activity, Zap, BarChart3, Volume2, Settings, Monitor, ArrowLeft } from "lucide-react"
 import { StatsCards } from "@/components/stats-cards"
 import { EventsList } from "@/components/events-list"
 import { InteractiveMap } from "@/components/interactive-map"
@@ -15,9 +14,30 @@ import Link from "next/link"
 import { LogoutButton } from "@/components/logout-button"
 import { DataAnalysisModule } from "@/components/data-analysis-module"
 import { useEffect, useState } from "react"
+import Image from "next/image"
 
 interface MonitoringDashboardProps {
   onBackToSelector?: () => void
+}
+
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, { cache: "no-store" })
+    if (!res.ok) {
+      return null
+    }
+    const data = (await res.json()) as { data?: T; success?: boolean; count?: number }
+    if (Array.isArray(data)) {
+      return data as T
+    }
+    if (data?.data) {
+      return data.data
+    }
+    return (data as unknown) as T
+  } catch (error) {
+    console.error("Failed to fetch", url, error)
+    return null
+  }
 }
 
 export function MonitoringDashboard({ onBackToSelector }: MonitoringDashboardProps) {
@@ -28,36 +48,26 @@ export function MonitoringDashboard({ onBackToSelector }: MonitoringDashboardPro
 
   useEffect(() => {
     async function fetchData() {
-      const supabase = createClient()
-
       try {
-        // Fetch recent events
-        const { data: eventsData } = await supabase
-          .from("waste_events")
-          .select("*")
-          .order("detected_at", { ascending: false })
-          .limit(10)
+        const eventsResponse = await fetchJson<{ success: boolean; data: any[] }>(
+          "/api/hardware/events?limit=10",
+        )
+        const locationsResponse = await fetchJson<{ success: boolean; data: any[] }>(
+          "/api/hardware/locations",
+        )
+        const activeEventsResponse = await fetchJson<{ success: boolean; data: any[] }>(
+          "/api/hardware/events?status=active",
+        )
 
-        // Fetch monitoring locations
-        const { data: locationsData } = await supabase.from("monitoring_locations").select("*").order("name")
-
-        // Fetch active alerts count
-        const { count: alertsCount } = await supabase
-          .from("waste_events")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "active")
-
-        setRecentEvents(eventsData || [])
-        setLocations(locationsData || [])
-        setActiveAlertsCount(alertsCount || 0)
-      } catch (error) {
-        console.error("Error fetching data:", error)
+        setRecentEvents(eventsResponse?.data || [])
+        setLocations(locationsResponse?.data || [])
+        setActiveAlertsCount(activeEventsResponse?.data?.length || 0)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchData()
+    void fetchData()
   }, [])
 
   if (loading) {
@@ -83,9 +93,14 @@ export function MonitoringDashboard({ onBackToSelector }: MonitoringDashboardPro
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
               )}
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/20 neon-glow">
-                <Shield className="w-6 h-6 text-primary" />
-              </div>
+              <Image
+                src="/assets/logo.png"
+                alt="Illegal Dumping Control"
+                width={48}
+                height={48}
+                className="rounded-lg shadow-md"
+                priority
+              />
               <div>
                 <h1 className="text-2xl font-bold neon-text">政府监管端 - AI智能垃圾监管系统</h1>
                 <p className="text-sm text-muted-foreground">昆山市全域监控 · 智能预警 · 数据分析</p>

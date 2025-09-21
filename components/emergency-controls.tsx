@@ -26,10 +26,20 @@ export function EmergencyControls({ activeEvents }: EmergencyControlsProps) {
     setIsTriggering(true)
     console.log("[v0] Triggering emergency alert:", type, locationName || "all locations")
 
-    // Simulate emergency response
-    setTimeout(() => {
-      setIsTriggering(false)
-    }, 2000)
+    try {
+      await fetch("/api/hardware/alarm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "trigger" }),
+      })
+    } catch (error) {
+      console.error("Failed to trigger alarm", error)
+    } finally {
+      void new Audio("/assets/audio/alarm.m4a").play().catch((err) => {
+        console.warn("Alarm audio playback blocked", err)
+      })
+      setTimeout(() => setIsTriggering(false), 1500)
+    }
   }
 
   const activateEmergencyMode = () => {

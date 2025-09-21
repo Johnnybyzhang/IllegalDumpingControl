@@ -7,6 +7,7 @@ import logging
 import time
 from dataclasses import dataclass
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
@@ -39,6 +40,8 @@ class YOLODetector:
         self._settings = settings
         self._model: Optional["YOLO"] = None
         self._model_info: Optional[str] = None
+        self._weights_path: Path = Path(settings.path).expanduser()
+        self._class_map: dict[int, str] = {}
 
     @property
     def is_loaded(self) -> bool:
@@ -60,10 +63,29 @@ class YOLODetector:
             LOGGER.warning(message)
             return ModelLoadResult(False, message)
 
+        weights_path = Path(self._settings.path).expanduser()
+        self._weights_path = weights_path
+
+        if not weights_path.exists():
+            message = f"Model weights not found at {weights_path}"
+            LOGGER.error(message)
+            return ModelLoadResult(False, message)
+
         try:
-            self._model = YOLO(self._settings.path)
-            self._model_info = getattr(self._model, "model", None)
-            LOGGER.info("Loaded YOLO model from %s", self._settings.path)
+            self._model = YOLO(str(weights_path))
+            names = getattr(self._model, "names", None)
+            if isinstance(names, dict):
+                self._class_map = {int(k): str(v) for k, v in names.items()}
+            elif isinstance(names, (list, tuple)):
+                self._class_map = {
+                    int(idx): str(label) for idx, label in enumerate(names)
+                }
+            else:
+                self._class_map = {}
+
+            model_info = getattr(self._model, "model", None)
+            self._model_info = str(model_info) if model_info is not None else None
+            LOGGER.info("Loaded YOLO model from %s", weights_path)
             return ModelLoadResult(True, "Model loaded successfully.")
         except Exception as exc:  # pragma: no cover - depends on runtime
             message = f"Failed to load YOLO model: {exc}"
@@ -78,35 +100,44 @@ class YOLODetector:
         note = None
 
         if self._model is None:
-            note = (
-                "YOLO model has not been loaded. This is an expected response while the"
-                " scaffold is waiting for the v11n weights."
-            )
-            LOGGER.debug("Returning scaffold inference response: model not loaded.")
-        else:
+            load_result = self.load_model()
+            if not load_result.success:
+                note = load_result.message
+                LOGGER.debug("Returning inference stub: %s", load_result.message)
+
+        if self._model is not None:
+            if frame.dtype != np.uint8:
+                frame = frame.astype(np.uint8)
+            frame = np.ascontiguousarray(frame)
+
             try:  # pragma: no cover - depends on ultralytics behaviour
-                results = self._model(
+                results = self._model.predict(
                     frame,
                     verbose=False,
                     conf=self._settings.confidence_threshold,
                     iou=self._settings.iou_threshold,
                 )
-                raw_predictions = results[0]
-                detections = self._convert_predictions(raw_predictions)
+                if not results:
+                    LOGGER.debug("YOLO returned no results for the provided frame.")
+                else:
+                    raw_predictions = results[0]
+                    detections = self._convert_predictions(raw_predictions)
             except Exception as exc:
                 note = f"Inference failed: {exc}"
                 LOGGER.exception("YOLO inference failed: %s", exc)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         metadata = InferenceMetadata(
-            model_path=self._settings.path,
+            model_path=str(self._weights_path),
+            model_info=self._model_info,
+            detection_count=len(detections),
             inference_ms=elapsed_ms,
             note=note,
         )
 
         encoded_image: Optional[str] = None
         if return_image:
-            encoded_image = self._encode_image(frame)
+            encoded_image = self.encode_frame(frame)
 
         return InferenceResponse(
             detections=detections,
@@ -114,7 +145,7 @@ class YOLODetector:
             encoded_image=encoded_image,
         )
 
-    def _encode_image(self, frame: np.ndarray) -> str:
+    def encode_frame(self, frame: np.ndarray) -> str:
         """Encode a NumPy frame as base64 PNG."""
 
         image = Image.fromarray(frame.astype(np.uint8))
@@ -132,20 +163,54 @@ class YOLODetector:
 
         boxes: list[BoundingBox] = []
         try:  # pragma: no cover - depends on ultralytics
-            for box in predictions.boxes:
-                xyxy = box.xyxy[0].tolist()
+            yolo_boxes = getattr(predictions, "boxes", None)
+            if yolo_boxes is None:
+                LOGGER.debug("YOLO predictions missing 'boxes' attribute.")
+                return boxes
+
+            if hasattr(yolo_boxes, "cpu"):
+                yolo_boxes = yolo_boxes.cpu()
+
+            xyxy_list = yolo_boxes.xyxy if hasattr(yolo_boxes, "xyxy") else None
+            cls_list = yolo_boxes.cls if hasattr(yolo_boxes, "cls") else None
+            conf_list = yolo_boxes.conf if hasattr(yolo_boxes, "conf") else None
+
+            length = len(xyxy_list) if xyxy_list is not None else len(yolo_boxes)
+
+            for idx in range(length):
+                if xyxy_list is not None:
+                    xyxy = xyxy_list[idx].tolist()
+                else:
+                    xyxy = []
+
+                class_label = "unknown"
+                if cls_list is not None:
+                    try:
+                        class_id = int(cls_list[idx].item())
+                    except AttributeError:
+                        class_id = int(cls_list[idx])
+                    class_label = self._class_map.get(class_id, str(class_id))
+
+                confidence = 0.0
+                if conf_list is not None:
+                    try:
+                        confidence = float(conf_list[idx].item())
+                    except AttributeError:
+                        confidence = float(conf_list[idx])
+
+                if len(xyxy) >= 4:
+                    x_min, y_min, x_max, y_max = xyxy[:4]
+                else:
+                    x_min = y_min = x_max = y_max = 0
+
                 boxes.append(
                     BoundingBox(
-                        label=str(box.cls.cpu().item())
-                        if hasattr(box, "cls")
-                        else "unknown",
-                        confidence=float(box.conf.cpu().item())
-                        if hasattr(box, "conf")
-                        else 0.0,
-                        x_min=int(xyxy[0]),
-                        y_min=int(xyxy[1]),
-                        x_max=int(xyxy[2]),
-                        y_max=int(xyxy[3]),
+                        label=class_label,
+                        confidence=confidence,
+                        x_min=int(round(x_min)),
+                        y_min=int(round(y_min)),
+                        x_max=int(round(x_max)),
+                        y_max=int(round(y_max)),
                     )
                 )
         except Exception as exc:
